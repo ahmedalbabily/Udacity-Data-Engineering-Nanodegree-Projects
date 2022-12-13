@@ -1,0 +1,2905 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "# ETL Processes\n",
+    "Use this notebook to develop the ETL process for each of your tables before completing the `etl.py` file to load the whole datasets."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "import os\n",
+    "import glob\n",
+    "import psycopg2\n",
+    "import pandas as pd\n",
+    "from sql_queries import *\n",
+    "\n",
+    "import numpy\n",
+    "from psycopg2.extensions import register_adapter, AsIs\n",
+    "def addapt_numpy_float64(numpy_float64):\n",
+    "    return AsIs(numpy_float64)\n",
+    "def addapt_numpy_int64(numpy_int64):\n",
+    "    return AsIs(numpy_int64)\n",
+    "register_adapter(numpy.float64, addapt_numpy_float64)\n",
+    "register_adapter(numpy.int64, addapt_numpy_int64)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "conn = psycopg2.connect(\"host=127.0.0.1 dbname=sparkifydb user=student password=student\")\n",
+    "cur = conn.cursor()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "def get_files(filepath):\n",
+    "    all_files = []\n",
+    "    for root, dirs, files in os.walk(filepath):\n",
+    "        files = glob.glob(os.path.join(root,'*.json'))\n",
+    "        for f in files :\n",
+    "            all_files.append(os.path.abspath(f))\n",
+    "    \n",
+    "    return all_files"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "# Process `song_data`\n",
+    "In this first part, you'll perform ETL on the first dataset, `song_data`, to create the `songs` and `artists` dimensional tables.\n",
+    "\n",
+    "Let's perform ETL on a single song file and load a single record into each table to start.\n",
+    "- Use the `get_files` function provided above to get a list of all song JSON files in `data/song_data`\n",
+    "- Select the first song in this list\n",
+    "- Read the song file and view the data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "song_files = get_files('/home/workspace/data/song_data')\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "filepath = song_files[0]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>artist_id</th>\n",
+       "      <th>artist_latitude</th>\n",
+       "      <th>artist_location</th>\n",
+       "      <th>artist_longitude</th>\n",
+       "      <th>artist_name</th>\n",
+       "      <th>duration</th>\n",
+       "      <th>num_songs</th>\n",
+       "      <th>song_id</th>\n",
+       "      <th>title</th>\n",
+       "      <th>year</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>ARD7TVE1187B99BFB1</td>\n",
+       "      <td>None</td>\n",
+       "      <td>California - LA</td>\n",
+       "      <td>None</td>\n",
+       "      <td>Casual</td>\n",
+       "      <td>218.932</td>\n",
+       "      <td>1</td>\n",
+       "      <td>SOMZWCG12A8C13C480</td>\n",
+       "      <td>I Didn't Mean To</td>\n",
+       "      <td>0</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "            artist_id artist_latitude  artist_location artist_longitude  \\\n",
+       "0  ARD7TVE1187B99BFB1            None  California - LA             None   \n",
+       "\n",
+       "  artist_name duration  num_songs             song_id             title  year  \n",
+       "0      Casual  218.932          1  SOMZWCG12A8C13C480  I Didn't Mean To     0  "
+      ]
+     },
+     "execution_count": 6,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df = pd.read_json(filepath, lines=True).replace({pd.np.nan: None})\n",
+    "df.head()\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "## #1: `songs` Table\n",
+    "#### Extract Data for Songs Table\n",
+    "- Select columns for song ID, title, artist ID, year, and duration\n",
+    "- Use `df.values` to select just the values from the dataframe\n",
+    "- Index to select the first (only) record in the dataframe\n",
+    "- Convert the array to a list and set it to `song_data`"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "['SOMZWCG12A8C13C480', \"I Didn't Mean To\", 'ARD7TVE1187B99BFB1', 0, 218.93179]"
+      ]
+     },
+     "execution_count": 10,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "song_data = df[['song_id','title','artist_id','year','duration']].iloc[0].values.tolist()\n",
+    "song_data\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "#### Insert Record into Song Table\n",
+    "Implement the `song_table_insert` query in `sql_queries.py` and run the cell below to insert a record for this song into the `songs` table. Remember to run `create_tables.py` before running the cell below to ensure you've created/resetted the `songs` table in the sparkify database."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "\n",
+    "cur.execute(song_table_insert, song_data)\n",
+    "conn.commit()\n",
+    "\n",
+    "    "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "Run `test.ipynb` to see if you've successfully added a record to this table."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "## #2: `artists` Table\n",
+    "#### Extract Data for Artists Table\n",
+    "- Select columns for artist ID, name, location, latitude, and longitude\n",
+    "- Use `df.values` to select just the values from the dataframe\n",
+    "- Index to select the first (only) record in the dataframe\n",
+    "- Convert the array to a list and set it to `artist_data`"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "['ARD7TVE1187B99BFB1', 'Casual', 'California - LA', None, None]"
+      ]
+     },
+     "execution_count": 12,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "artist_data = df[['artist_id','artist_name','artist_location','artist_latitude','artist_longitude']].iloc[0].values.tolist()\n",
+    "artist_data"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "#### Insert Record into Artist Table\n",
+    "Implement the `artist_table_insert` query in `sql_queries.py` and run the cell below to insert a record for this song's artist into the `artists` table. Remember to run `create_tables.py` before running the cell below to ensure you've created/resetted the `artists` table in the sparkify database."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "insert into artists (artist_id,name,location,latitude,longitude) VALUES (%s,%s,%s,%s,%s)\n",
+      "on conflict (artist_id) do nothing\n"
+     ]
+    }
+   ],
+   "source": [
+    "cur.execute(artist_table_insert, artist_data)\n",
+    "conn.commit()\n",
+    "print(artist_table_insert)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "Run `test.ipynb` to see if you've successfully added a record to this table."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "# Process `log_data`\n",
+    "In this part, you'll perform ETL on the second dataset, `log_data`, to create the `time` and `users` dimensional tables, as well as the `songplays` fact table.\n",
+    "\n",
+    "Let's perform ETL on a single log file and load a single record into each table.\n",
+    "- Use the `get_files` function provided above to get a list of all log JSON files in `data/log_data`\n",
+    "- Select the first log file in this list\n",
+    "- Read the log file and view the data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "log_files = get_files('/home/workspace/data/log_data')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "filepath = log_files[0]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>artist</th>\n",
+       "      <th>auth</th>\n",
+       "      <th>firstName</th>\n",
+       "      <th>gender</th>\n",
+       "      <th>itemInSession</th>\n",
+       "      <th>lastName</th>\n",
+       "      <th>length</th>\n",
+       "      <th>level</th>\n",
+       "      <th>location</th>\n",
+       "      <th>method</th>\n",
+       "      <th>page</th>\n",
+       "      <th>registration</th>\n",
+       "      <th>sessionId</th>\n",
+       "      <th>song</th>\n",
+       "      <th>status</th>\n",
+       "      <th>ts</th>\n",
+       "      <th>userAgent</th>\n",
+       "      <th>userId</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>Stephen Lynch</td>\n",
+       "      <td>Logged In</td>\n",
+       "      <td>Jayden</td>\n",
+       "      <td>M</td>\n",
+       "      <td>0</td>\n",
+       "      <td>Bell</td>\n",
+       "      <td>182.857</td>\n",
+       "      <td>free</td>\n",
+       "      <td>Dallas-Fort Worth-Arlington, TX</td>\n",
+       "      <td>PUT</td>\n",
+       "      <td>NextSong</td>\n",
+       "      <td>1.54099e+12</td>\n",
+       "      <td>829</td>\n",
+       "      <td>Jim Henson's Dead</td>\n",
+       "      <td>200</td>\n",
+       "      <td>1543537327796</td>\n",
+       "      <td>Mozilla/5.0 (compatible; MSIE 10.0; Windows NT...</td>\n",
+       "      <td>91</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>Manowar</td>\n",
+       "      <td>Logged In</td>\n",
+       "      <td>Jacob</td>\n",
+       "      <td>M</td>\n",
+       "      <td>0</td>\n",
+       "      <td>Klein</td>\n",
+       "      <td>247.562</td>\n",
+       "      <td>paid</td>\n",
+       "      <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "      <td>PUT</td>\n",
+       "      <td>NextSong</td>\n",
+       "      <td>1.54056e+12</td>\n",
+       "      <td>1049</td>\n",
+       "      <td>Shell Shock</td>\n",
+       "      <td>200</td>\n",
+       "      <td>1543540121796</td>\n",
+       "      <td>\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...</td>\n",
+       "      <td>73</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>Morcheeba</td>\n",
+       "      <td>Logged In</td>\n",
+       "      <td>Jacob</td>\n",
+       "      <td>M</td>\n",
+       "      <td>1</td>\n",
+       "      <td>Klein</td>\n",
+       "      <td>257.41</td>\n",
+       "      <td>paid</td>\n",
+       "      <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "      <td>PUT</td>\n",
+       "      <td>NextSong</td>\n",
+       "      <td>1.54056e+12</td>\n",
+       "      <td>1049</td>\n",
+       "      <td>Women Lose Weight (Feat: Slick Rick)</td>\n",
+       "      <td>200</td>\n",
+       "      <td>1543540368796</td>\n",
+       "      <td>\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...</td>\n",
+       "      <td>73</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>Maroon 5</td>\n",
+       "      <td>Logged In</td>\n",
+       "      <td>Jacob</td>\n",
+       "      <td>M</td>\n",
+       "      <td>2</td>\n",
+       "      <td>Klein</td>\n",
+       "      <td>231.235</td>\n",
+       "      <td>paid</td>\n",
+       "      <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "      <td>PUT</td>\n",
+       "      <td>NextSong</td>\n",
+       "      <td>1.54056e+12</td>\n",
+       "      <td>1049</td>\n",
+       "      <td>Won't Go Home Without You</td>\n",
+       "      <td>200</td>\n",
+       "      <td>1543540625796</td>\n",
+       "      <td>\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...</td>\n",
+       "      <td>73</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>Train</td>\n",
+       "      <td>Logged In</td>\n",
+       "      <td>Jacob</td>\n",
+       "      <td>M</td>\n",
+       "      <td>3</td>\n",
+       "      <td>Klein</td>\n",
+       "      <td>216.764</td>\n",
+       "      <td>paid</td>\n",
+       "      <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "      <td>PUT</td>\n",
+       "      <td>NextSong</td>\n",
+       "      <td>1.54056e+12</td>\n",
+       "      <td>1049</td>\n",
+       "      <td>Hey_ Soul Sister</td>\n",
+       "      <td>200</td>\n",
+       "      <td>1543540856796</td>\n",
+       "      <td>\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...</td>\n",
+       "      <td>73</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "          artist       auth firstName gender  itemInSession lastName   length  \\\n",
+       "0  Stephen Lynch  Logged In    Jayden      M              0     Bell  182.857   \n",
+       "1        Manowar  Logged In     Jacob      M              0    Klein  247.562   \n",
+       "2      Morcheeba  Logged In     Jacob      M              1    Klein   257.41   \n",
+       "3       Maroon 5  Logged In     Jacob      M              2    Klein  231.235   \n",
+       "4          Train  Logged In     Jacob      M              3    Klein  216.764   \n",
+       "\n",
+       "  level                             location method      page registration  \\\n",
+       "0  free      Dallas-Fort Worth-Arlington, TX    PUT  NextSong  1.54099e+12   \n",
+       "1  paid  Tampa-St. Petersburg-Clearwater, FL    PUT  NextSong  1.54056e+12   \n",
+       "2  paid  Tampa-St. Petersburg-Clearwater, FL    PUT  NextSong  1.54056e+12   \n",
+       "3  paid  Tampa-St. Petersburg-Clearwater, FL    PUT  NextSong  1.54056e+12   \n",
+       "4  paid  Tampa-St. Petersburg-Clearwater, FL    PUT  NextSong  1.54056e+12   \n",
+       "\n",
+       "   sessionId                                  song  status             ts  \\\n",
+       "0        829                     Jim Henson's Dead     200  1543537327796   \n",
+       "1       1049                           Shell Shock     200  1543540121796   \n",
+       "2       1049  Women Lose Weight (Feat: Slick Rick)     200  1543540368796   \n",
+       "3       1049             Won't Go Home Without You     200  1543540625796   \n",
+       "4       1049                      Hey_ Soul Sister     200  1543540856796   \n",
+       "\n",
+       "                                           userAgent userId  \n",
+       "0  Mozilla/5.0 (compatible; MSIE 10.0; Windows NT...     91  \n",
+       "1  \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...     73  \n",
+       "2  \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...     73  \n",
+       "3  \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...     73  \n",
+       "4  \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...     73  "
+      ]
+     },
+     "execution_count": 16,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df = pd.read_json(filepath, lines=True).replace({pd.np.nan: None})\n",
+    "\n",
+    "df.head()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "## #3: `time` Table\n",
+    "#### Extract Data for Time Table\n",
+    "- Filter records by `NextSong` action\n",
+    "- Convert the `ts` timestamp column to datetime\n",
+    "  - Hint: the current timestamp is in milliseconds\n",
+    "- Extract the timestamp, hour, day, week of year, month, year, and weekday from the `ts` column and set `time_data` to a list containing these values in order\n",
+    "  - Hint: use pandas' [`dt` attribute](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Series.dt.html) to access easily datetimelike properties.\n",
+    "- Specify labels for these columns and set to `column_labels`\n",
+    "- Create a dataframe, `time_df,` containing the time data for this file by combining `column_labels` and `time_data` into a dictionary and converting this into a dataframe"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>artist</th>\n",
+       "      <th>auth</th>\n",
+       "      <th>firstName</th>\n",
+       "      <th>gender</th>\n",
+       "      <th>itemInSession</th>\n",
+       "      <th>lastName</th>\n",
+       "      <th>length</th>\n",
+       "      <th>level</th>\n",
+       "      <th>location</th>\n",
+       "      <th>method</th>\n",
+       "      <th>page</th>\n",
+       "      <th>registration</th>\n",
+       "      <th>sessionId</th>\n",
+       "      <th>song</th>\n",
+       "      <th>status</th>\n",
+       "      <th>ts</th>\n",
+       "      <th>userAgent</th>\n",
+       "      <th>userId</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>Stephen Lynch</td>\n",
+       "      <td>Logged In</td>\n",
+       "      <td>Jayden</td>\n",
+       "      <td>M</td>\n",
+       "      <td>0</td>\n",
+       "      <td>Bell</td>\n",
+       "      <td>182.857</td>\n",
+       "      <td>free</td>\n",
+       "      <td>Dallas-Fort Worth-Arlington, TX</td>\n",
+       "      <td>PUT</td>\n",
+       "      <td>NextSong</td>\n",
+       "      <td>1.54099e+12</td>\n",
+       "      <td>829</td>\n",
+       "      <td>Jim Henson's Dead</td>\n",
+       "      <td>200</td>\n",
+       "      <td>1543537327796</td>\n",
+       "      <td>Mozilla/5.0 (compatible; MSIE 10.0; Windows NT...</td>\n",
+       "      <td>91</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>Manowar</td>\n",
+       "      <td>Logged In</td>\n",
+       "      <td>Jacob</td>\n",
+       "      <td>M</td>\n",
+       "      <td>0</td>\n",
+       "      <td>Klein</td>\n",
+       "      <td>247.562</td>\n",
+       "      <td>paid</td>\n",
+       "      <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "      <td>PUT</td>\n",
+       "      <td>NextSong</td>\n",
+       "      <td>1.54056e+12</td>\n",
+       "      <td>1049</td>\n",
+       "      <td>Shell Shock</td>\n",
+       "      <td>200</td>\n",
+       "      <td>1543540121796</td>\n",
+       "      <td>\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...</td>\n",
+       "      <td>73</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>Morcheeba</td>\n",
+       "      <td>Logged In</td>\n",
+       "      <td>Jacob</td>\n",
+       "      <td>M</td>\n",
+       "      <td>1</td>\n",
+       "      <td>Klein</td>\n",
+       "      <td>257.41</td>\n",
+       "      <td>paid</td>\n",
+       "      <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "      <td>PUT</td>\n",
+       "      <td>NextSong</td>\n",
+       "      <td>1.54056e+12</td>\n",
+       "      <td>1049</td>\n",
+       "      <td>Women Lose Weight (Feat: Slick Rick)</td>\n",
+       "      <td>200</td>\n",
+       "      <td>1543540368796</td>\n",
+       "      <td>\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...</td>\n",
+       "      <td>73</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>Maroon 5</td>\n",
+       "      <td>Logged In</td>\n",
+       "      <td>Jacob</td>\n",
+       "      <td>M</td>\n",
+       "      <td>2</td>\n",
+       "      <td>Klein</td>\n",
+       "      <td>231.235</td>\n",
+       "      <td>paid</td>\n",
+       "      <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "      <td>PUT</td>\n",
+       "      <td>NextSong</td>\n",
+       "      <td>1.54056e+12</td>\n",
+       "      <td>1049</td>\n",
+       "      <td>Won't Go Home Without You</td>\n",
+       "      <td>200</td>\n",
+       "      <td>1543540625796</td>\n",
+       "      <td>\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...</td>\n",
+       "      <td>73</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>Train</td>\n",
+       "      <td>Logged In</td>\n",
+       "      <td>Jacob</td>\n",
+       "      <td>M</td>\n",
+       "      <td>3</td>\n",
+       "      <td>Klein</td>\n",
+       "      <td>216.764</td>\n",
+       "      <td>paid</td>\n",
+       "      <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "      <td>PUT</td>\n",
+       "      <td>NextSong</td>\n",
+       "      <td>1.54056e+12</td>\n",
+       "      <td>1049</td>\n",
+       "      <td>Hey_ Soul Sister</td>\n",
+       "      <td>200</td>\n",
+       "      <td>1543540856796</td>\n",
+       "      <td>\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...</td>\n",
+       "      <td>73</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "          artist       auth firstName gender  itemInSession lastName   length  \\\n",
+       "0  Stephen Lynch  Logged In    Jayden      M              0     Bell  182.857   \n",
+       "1        Manowar  Logged In     Jacob      M              0    Klein  247.562   \n",
+       "2      Morcheeba  Logged In     Jacob      M              1    Klein   257.41   \n",
+       "3       Maroon 5  Logged In     Jacob      M              2    Klein  231.235   \n",
+       "4          Train  Logged In     Jacob      M              3    Klein  216.764   \n",
+       "\n",
+       "  level                             location method      page registration  \\\n",
+       "0  free      Dallas-Fort Worth-Arlington, TX    PUT  NextSong  1.54099e+12   \n",
+       "1  paid  Tampa-St. Petersburg-Clearwater, FL    PUT  NextSong  1.54056e+12   \n",
+       "2  paid  Tampa-St. Petersburg-Clearwater, FL    PUT  NextSong  1.54056e+12   \n",
+       "3  paid  Tampa-St. Petersburg-Clearwater, FL    PUT  NextSong  1.54056e+12   \n",
+       "4  paid  Tampa-St. Petersburg-Clearwater, FL    PUT  NextSong  1.54056e+12   \n",
+       "\n",
+       "   sessionId                                  song  status             ts  \\\n",
+       "0        829                     Jim Henson's Dead     200  1543537327796   \n",
+       "1       1049                           Shell Shock     200  1543540121796   \n",
+       "2       1049  Women Lose Weight (Feat: Slick Rick)     200  1543540368796   \n",
+       "3       1049             Won't Go Home Without You     200  1543540625796   \n",
+       "4       1049                      Hey_ Soul Sister     200  1543540856796   \n",
+       "\n",
+       "                                           userAgent userId  \n",
+       "0  Mozilla/5.0 (compatible; MSIE 10.0; Windows NT...     91  \n",
+       "1  \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...     73  \n",
+       "2  \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...     73  \n",
+       "3  \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...     73  \n",
+       "4  \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4...     73  "
+      ]
+     },
+     "execution_count": 17,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "df = df.query(\"page=='NextSong'\")\n",
+    "df.head()\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "0   2018-11-30 00:22:07.796\n",
+       "1   2018-11-30 01:08:41.796\n",
+       "2   2018-11-30 01:12:48.796\n",
+       "3   2018-11-30 01:17:05.796\n",
+       "4   2018-11-30 01:20:56.796\n",
+       "Name: ts, dtype: datetime64[ns]"
+      ]
+     },
+     "execution_count": 18,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "t = pd.to_datetime(df['ts'], unit='ms')\n",
+    "\n",
+    "t.head()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "<class 'tuple'>\n"
+     ]
+    }
+   ],
+   "source": [
+    "time_data = (list(df['ts']),list(t.dt.hour),list(t.dt.day),list(t.dt.weekofyear),list(t.dt.month),list(t.dt.year),list(t.dt.weekday))\n",
+    "column_labels = (\"start_time\",\"hour\", \"day\" , \"week\", \"month\",\n",
+    "\"year\" , \"weekday\")\n",
+    "print(type(time_data))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "        start_time  hour  day  week  month  year  weekday\n",
+      "0    1543537327796     0   30    48     11  2018        4\n",
+      "1    1543540121796     1   30    48     11  2018        4\n",
+      "2    1543540368796     1   30    48     11  2018        4\n",
+      "3    1543540625796     1   30    48     11  2018        4\n",
+      "4    1543540856796     1   30    48     11  2018        4\n",
+      "5    1543541072796     1   30    48     11  2018        4\n",
+      "6    1543541299796     1   30    48     11  2018        4\n",
+      "7    1543541520796     1   30    48     11  2018        4\n",
+      "8    1543541897796     1   30    48     11  2018        4\n",
+      "9    1543541993796     1   30    48     11  2018        4\n",
+      "10   1543542250796     1   30    48     11  2018        4\n",
+      "11   1543542516796     1   30    48     11  2018        4\n",
+      "12   1543542628796     1   30    48     11  2018        4\n",
+      "13   1543542935796     1   30    48     11  2018        4\n",
+      "14   1543543268796     2   30    48     11  2018        4\n",
+      "15   1543543524796     2   30    48     11  2018        4\n",
+      "16   1543543821796     2   30    48     11  2018        4\n",
+      "17   1543544154796     2   30    48     11  2018        4\n",
+      "18   1543544359796     2   30    48     11  2018        4\n",
+      "19   1543547190796     3   30    48     11  2018        4\n",
+      "20   1543547430796     3   30    48     11  2018        4\n",
+      "21   1543547583796     3   30    48     11  2018        4\n",
+      "22   1543547741796     3   30    48     11  2018        4\n",
+      "23   1543548069796     3   30    48     11  2018        4\n",
+      "24   1543548563796     3   30    48     11  2018        4\n",
+      "25   1543548766796     3   30    48     11  2018        4\n",
+      "26   1543549044796     3   30    48     11  2018        4\n",
+      "27   1543549171796     3   30    48     11  2018        4\n",
+      "28   1543549468796     3   30    48     11  2018        4\n",
+      "29   1543549790796     3   30    48     11  2018        4\n",
+      "..             ...   ...  ...   ...    ...   ...      ...\n",
+      "300  1543600185796    17   30    48     11  2018        4\n",
+      "301  1543600424796    17   30    48     11  2018        4\n",
+      "302  1543600483796    17   30    48     11  2018        4\n",
+      "303  1543600644796    17   30    48     11  2018        4\n",
+      "304  1543600723796    17   30    48     11  2018        4\n",
+      "305  1543600999796    18   30    48     11  2018        4\n",
+      "306  1543601063796    18   30    48     11  2018        4\n",
+      "307  1543601287796    18   30    48     11  2018        4\n",
+      "308  1543601401796    18   30    48     11  2018        4\n",
+      "309  1543601616796    18   30    48     11  2018        4\n",
+      "310  1543601696796    18   30    48     11  2018        4\n",
+      "311  1543601780796    18   30    48     11  2018        4\n",
+      "312  1543601943796    18   30    48     11  2018        4\n",
+      "313  1543601973796    18   30    48     11  2018        4\n",
+      "314  1543602079796    18   30    48     11  2018        4\n",
+      "315  1543602106796    18   30    48     11  2018        4\n",
+      "316  1543602245796    18   30    48     11  2018        4\n",
+      "317  1543602372796    18   30    48     11  2018        4\n",
+      "318  1543602488796    18   30    48     11  2018        4\n",
+      "319  1543602542796    18   30    48     11  2018        4\n",
+      "320  1543602694796    18   30    48     11  2018        4\n",
+      "321  1543602766796    18   30    48     11  2018        4\n",
+      "322  1543602919796    18   30    48     11  2018        4\n",
+      "323  1543602985796    18   30    48     11  2018        4\n",
+      "324  1543603162796    18   30    48     11  2018        4\n",
+      "325  1543603205796    18   30    48     11  2018        4\n",
+      "326  1543603476796    18   30    48     11  2018        4\n",
+      "327  1543603678796    18   30    48     11  2018        4\n",
+      "328  1543603884796    18   30    48     11  2018        4\n",
+      "329  1543607664796    19   30    48     11  2018        4\n",
+      "\n",
+      "[330 rows x 7 columns]\n"
+     ]
+    }
+   ],
+   "source": [
+    "\n",
+    "time_df= pd.DataFrame.from_dict(dict(zip(column_labels,time_data)))\n",
+    "\n",
+    "print(time_df)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "#### Insert Records into Time Table\n",
+    "Implement the `time_table_insert` query in `sql_queries.py` and run the cell below to insert records for the timestamps in this log file into the `time` table. Remember to run `create_tables.py` before running the cell below to ensure you've created/resetted the `time` table in the sparkify database."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "for i, row in time_df.iterrows():\n",
+    "    cur.execute(time_table_insert, list(row))\n",
+    "    conn.commit()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "Run `test.ipynb` to see if you've successfully added records to this table."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "## #4: `users` Table\n",
+    "#### Extract Data for Users Table\n",
+    "- Select columns for user ID, first name, last name, gender and level and set to `user_df`"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>userId</th>\n",
+       "      <th>firstName</th>\n",
+       "      <th>lastName</th>\n",
+       "      <th>gender</th>\n",
+       "      <th>level</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>91</td>\n",
+       "      <td>Jayden</td>\n",
+       "      <td>Bell</td>\n",
+       "      <td>M</td>\n",
+       "      <td>free</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>73</td>\n",
+       "      <td>Jacob</td>\n",
+       "      <td>Klein</td>\n",
+       "      <td>M</td>\n",
+       "      <td>paid</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>73</td>\n",
+       "      <td>Jacob</td>\n",
+       "      <td>Klein</td>\n",
+       "      <td>M</td>\n",
+       "      <td>paid</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>73</td>\n",
+       "      <td>Jacob</td>\n",
+       "      <td>Klein</td>\n",
+       "      <td>M</td>\n",
+       "      <td>paid</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>73</td>\n",
+       "      <td>Jacob</td>\n",
+       "      <td>Klein</td>\n",
+       "      <td>M</td>\n",
+       "      <td>paid</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "  userId firstName lastName gender level\n",
+       "0     91    Jayden     Bell      M  free\n",
+       "1     73     Jacob    Klein      M  paid\n",
+       "2     73     Jacob    Klein      M  paid\n",
+       "3     73     Jacob    Klein      M  paid\n",
+       "4     73     Jacob    Klein      M  paid"
+      ]
+     },
+     "execution_count": 22,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "user_df = df[['userId','firstName','lastName','gender','level']]\n",
+    "user_df.head()\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "#### Insert Records into Users Table\n",
+    "Implement the `user_table_insert` query in `sql_queries.py` and run the cell below to insert records for the users in this log file into the `users` table. Remember to run `create_tables.py` before running the cell below to ensure you've created/resetted the `users` table in the sparkify database."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "for i, row in user_df.iterrows():\n",
+    "    cur.execute(user_table_insert, row)\n",
+    "    conn.commit()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "Run `test.ipynb` to see if you've successfully added records to this table."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "## #5: `songplays` Table\n",
+    "#### Extract Data and Songplays Table\n",
+    "This one is a little more complicated since information from the songs table, artists table, and original log file are all needed for the `songplays` table. Since the log file does not specify an ID for either the song or the artist, you'll need to get the song ID and artist ID by querying the songs and artists tables to find matches based on song title, artist name, and song duration time.\n",
+    "- Implement the `song_select` query in `sql_queries.py` to find the song ID and artist ID based on the title, artist name, and duration of a song.\n",
+    "- Select the timestamp, user ID, level, song ID, artist ID, session ID, location, and user agent and set to `songplay_data`\n",
+    "\n",
+    "#### Insert Records into Songplays Table\n",
+    "- Implement the `songplay_table_insert` query and run the cell below to insert records for the songplay actions in this log file into the `songplays` table. Remember to run `create_tables.py` before running the cell below to ensure you've created/resetted the `songplays` table in the sparkify database."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "for index, row in df.iterrows():\n",
+    "\n",
+    "    # get songid and artistid from song and artist tables\n",
+    "    cur.execute(song_select, (row.song, row.artist, row.length))\n",
+    "    results = cur.fetchone()\n",
+    "    \n",
+    "    if results:\n",
+    "        songid, artistid = results\n",
+    "    else:\n",
+    "        songid, artistid = None, None\n",
+    "\n",
+    "    # insert songplay record\n",
+    "    songplay_data = (row.ts,row.userId,row.level,songid,artistid,row.sessionId,row.location,row.userAgent)\n",
+    "    cur.execute(songplay_table_insert, songplay_data)\n",
+    "    conn.commit()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "Run `test.ipynb` to see if you've successfully added records to this table."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "# Close Connection to Sparkify Database"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "conn.close()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "# Implement `etl.py`\n",
+    "Use what you've completed in this notebook to implement `etl.py`."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.6.3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
+
+import os
+import glob
+import psycopg2
+import pandas as pd
+from sql_queries import *
+
+import numpy
+from psycopg2.extensions import register_adapter, AsIs
+def addapt_numpy_float64(numpy_float64):
+    return AsIs(numpy_float64)
+def addapt_numpy_int64(numpy_int64):
+    return AsIs(numpy_int64)
+register_adapter(numpy.float64, addapt_numpy_float64)
+register_adapter(numpy.int64, addapt_numpy_int64)
+
+
+def process_song_file(cur, filepath):
+    
+     """
+     -Gets the data from the song file and loads it into the songs and artists table
+    """
+    # open song file
+    df = pd.read_json(filepath, lines=True).replace({pd.np.nan: None})
+
+
+
+
+    #I need to insert artist data first for fk constraint not to be violated
+    
+        
+    # insert artist record
+    artist_data = df[['artist_id','artist_name','artist_location','artist_latitude','artist_longitude']].iloc[0].values.tolist()
+
+    cur.execute(artist_table_insert, artist_data)
+    
+    # insert song record
+    song_data = df[['song_id','title','artist_id','year','duration']].iloc[0].values.tolist()
+
+    cur.execute(song_table_insert, song_data)
+
+
+
+def process_log_file(cur, filepath):
+    
+        """
+     -Gets the data from the log file and loads it into the time, users and songplays tables
+    """
+    # open log file
+    df = pd.read_json(filepath, lines=True).replace({pd.np.nan: None})
+ 
+
+    # filter by NextSong action
+    df = df.query("page=='NextSong'") 
+
+    # convert timestamp column to datetime
+    t = pd.to_datetime(df['ts'], unit='ms')
+
+    
+    # insert time data records
+    time_data = (list(df['ts']),list(t.dt.hour),list(t.dt.day),list(t.dt.weekofyear),list(t.dt.month),list(t.dt.year),list(t.dt.weekday))
+
+    column_labels = ("start_time","hour", "day" , "week", "month","year" , "weekday")
+
+    
+    
+    time_df= pd.DataFrame.from_dict(dict(zip(column_labels,time_data)))
+ 
+
+    for i, row in time_df.iterrows():
+        cur.execute(time_table_insert, list(row))
+
+    # load user table
+    user_df = df[['userId','firstName','lastName','gender','level']]
+ 
+
+    # insert user records
+    for i, row in user_df.iterrows():
+        cur.execute(user_table_insert, row)
+
+    # insert songplay records
+    for index, row in df.iterrows():
+        
+        # get songid and artistid from song and artist tables
+        cur.execute(song_select, (row.song, row.artist, row.length))
+        results = cur.fetchone()
+        
+        if results:
+            songid, artistid = results
+        else:
+            songid, artistid = None, None
+
+        # insert songplay record
+        songplay_data = (row.ts,row.userId,row.level,songid,artistid,row.sessionId,row.location,row.userAgent)
+        cur.execute(songplay_table_insert, songplay_data)
+
+
+def process_data(cur, conn, filepath, func):
+    
+        """
+     -executes the two functions process_songs_file and process_log_file on all the files in their directories
+    """
+    # get all files matching extension from directory
+    all_files = []
+    for root, dirs, files in os.walk(filepath):
+        files = glob.glob(os.path.join(root,'*.json'))
+        for f in files :
+            all_files.append(os.path.abspath(f))
+
+    # get total number of files found
+    num_files = len(all_files)
+    print('{} files found in {}'.format(num_files, filepath))
+
+    # iterate over files and process
+    for i, datafile in enumerate(all_files, 1):
+        func(cur, datafile)
+        conn.commit()
+        print('{}/{} files processed.'.format(i, num_files))
+
+
+def main():
+    conn = psycopg2.connect("host=127.0.0.1 dbname=sparkifydb user=student password=student")
+    cur = conn.cursor()
+
+    process_data(cur, conn, filepath='data/song_data', func=process_song_file)
+    process_data(cur, conn, filepath='data/log_data', func=process_log_file)
+
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()
+# Project: Data Modeling with Postgres
+A startup called Sparkify have lots of data on songs and user activity on their new music streaming app. The startup is interested in analysing their users and what songs they're listening to. So, it was required to build a database from the data files which are in the form of JSON logs on user activity on the app, as well as a directory with JSON metadata on the songs in their app,
+so as to be able to easily query and analyse the data.
+This was done using Postgres database with tables designed to optimize queries on song play analysis. So a databse schema and ETL pipeline was created for this analysis. 
+
+
+# How to run the Python scripts?
+
+To be able to successfully execute the ETL pipleline, the .py scripts should be executed in the following sequence:
+1. create_tables.py
+2. etl.py
+
+The purpose of the create_tables.py is to clear all tables from past runs, recreate the tables and establish all queries to be used in the etl.py file. 
+
+a test notebook is available to look at the data after being loaded into the database as well as test the data types and constraints for possible changes in the future.
+
+
+# The Files/data used explained:
+
+
+## Data (Dataset) used
+- log_data
+- song_data
+
+
+## Notebooks (creating and testing the pipeline):
+- etl.ipynb (step by step creation of  ETL pipeline)
+- test.ipynb (testing the data and data types/constraints)
+
+## Python scripts
+- sql_queries.py (contains the queries used in the create_tables.py and the etl.py files)
+- create_tables.py (database restoration and tables creation script)
+- etl.py (the ETL pipeline)
+
+
+
+# Database Schema
+
+## Fact table: Songplays
+- songplay_id: PRIMARY KEY (auto-increment)
+- start_time: REFERENCES time (start_time) -->FK
+- user_id: REFERENCES users (user_id) -->FK
+- level
+- song_id: REFERENCES songs (song_id) -->FK
+- artist_id: REFERENCES artists (artist_id) -->FK
+- session_id
+- location
+- user_agent
+
+
+## Dimension table s: 
+# users
+- user_id: PRIMARY KEY
+- first_name
+- last_name
+- gender
+- level
+
+# songs
+- song_id: PRIMARY KEY
+- title
+- artist_id: REFERENCES artists (artist_id) --> FK
+- year
+- duration
+
+# artists
+- artist_id: PRIMARY KEY
+- name
+- location
+- latitude
+- longitude
+
+# time
+- start_time: PRIMARY KEY
+- hour
+- day
+- week
+- month
+- year
+- weekday
+
+
+
+
+
+# DROP TABLES
+
+songplay_table_drop = "drop table if exists songplays"
+user_table_drop = "drop table if exists users"
+song_table_drop = "drop table if exists songs"
+artist_table_drop = "drop table if exists artists"
+time_table_drop = "drop table if exists time"
+
+# CREATE TABLES
+
+songplay_table_create = ("""create table if not exists songplays (songplay_id serial PRIMARY KEY, start_time bigint REFERENCES time (start_time) NOT NULL, user_id int REFERENCES users (user_id) NOT NULL ,
+level varchar, song_id varchar REFERENCES songs (song_id), artist_id varchar REFERENCES artists (artist_id), session_id int,
+location varchar, user_agent varchar)
+""")
+
+user_table_create = ("""create table if not exists users (user_id int PRIMARY KEY, first_name varchar, 
+last_name varchar, gender varchar, level varchar)
+""")
+
+song_table_create = ("""create table if not exists songs (song_id varchar PRIMARY KEY, title varchar NOT NULL, artist_id varchar REFERENCES artists (artist_id), 
+year int,duration decimal NOT NULL)
+""")
+
+artist_table_create = ("""create table if not exists artists (artist_id varchar PRIMARY KEY, name varchar NOT NULL, location varchar, 
+latitude double precision,longitude double precision)
+""")
+
+
+time_table_create = ("""create table if not exists time (start_time bigint PRIMARY KEY, hour int, day int, week int, month int,
+year int, weekday int)
+""")
+
+# INSERT RECORDS
+
+songplay_table_insert = ("""insert into songplays (start_time, user_id,
+level, song_id, artist_id, session_id,
+location, user_agent) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING
+""")
+
+user_table_insert = ("""insert into users (user_id , first_name, 
+last_name, gender, level) VALUES (%s,%s,%s,%s,%s)
+on conflict (user_id) do nothing""")
+
+song_table_insert = ("""insert into songs (song_id,title,artist_id,year,duration) VALUES (%s,%s,%s,%s,%s) on conflict do nothing""")
+
+artist_table_insert = ("""insert into artists (artist_id,name,location,latitude,longitude) VALUES (%s,%s,%s,%s,%s)
+on conflict (artist_id) do nothing""")
+
+
+time_table_insert = ("""insert into time (start_time, hour, day , week , month ,
+year , weekday) VALUES (%s,%s,%s,%s,%s,%s,%s)
+on conflict (start_time) do nothing""")
+
+# FIND SONGS
+
+song_select = ("""select songs.song_id,artists.artist_id from songs, artists where songs.artist_id=artists.artist_id and songs.title=%s and artists.name=%s and songs.duration=%s
+""")
+
+
+
+# QUERY LISTS
+
+create_table_queries = [artist_table_create, song_table_create, user_table_create, time_table_create, songplay_table_create]
+drop_table_queries = [songplay_table_drop, user_table_drop, song_table_drop, artist_table_drop, time_table_drop]
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "%load_ext sql"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "'Connected: student@sparkifydb'"
+      ]
+     },
+     "execution_count": 2,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%sql postgresql://student:student@127.0.0.1/sparkifydb"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "10 rows affected.\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<table>\n",
+       "    <tr>\n",
+       "        <th>songplay_id</th>\n",
+       "        <th>start_time</th>\n",
+       "        <th>user_id</th>\n",
+       "        <th>level</th>\n",
+       "        <th>song_id</th>\n",
+       "        <th>artist_id</th>\n",
+       "        <th>session_id</th>\n",
+       "        <th>location</th>\n",
+       "        <th>user_agent</th>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>1</td>\n",
+       "        <td>1543537327796</td>\n",
+       "        <td>91</td>\n",
+       "        <td>free</td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "        <td>829</td>\n",
+       "        <td>Dallas-Fort Worth-Arlington, TX</td>\n",
+       "        <td>Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.2; WOW64; Trident/6.0)</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>2</td>\n",
+       "        <td>1543540121796</td>\n",
+       "        <td>73</td>\n",
+       "        <td>paid</td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "        <td>1049</td>\n",
+       "        <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "        <td>&quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2&quot;</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>3</td>\n",
+       "        <td>1543540368796</td>\n",
+       "        <td>73</td>\n",
+       "        <td>paid</td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "        <td>1049</td>\n",
+       "        <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "        <td>&quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2&quot;</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>4</td>\n",
+       "        <td>1543540625796</td>\n",
+       "        <td>73</td>\n",
+       "        <td>paid</td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "        <td>1049</td>\n",
+       "        <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "        <td>&quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2&quot;</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>5</td>\n",
+       "        <td>1543540856796</td>\n",
+       "        <td>73</td>\n",
+       "        <td>paid</td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "        <td>1049</td>\n",
+       "        <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "        <td>&quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2&quot;</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>6</td>\n",
+       "        <td>1543541072796</td>\n",
+       "        <td>73</td>\n",
+       "        <td>paid</td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "        <td>1049</td>\n",
+       "        <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "        <td>&quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2&quot;</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>7</td>\n",
+       "        <td>1543541299796</td>\n",
+       "        <td>73</td>\n",
+       "        <td>paid</td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "        <td>1049</td>\n",
+       "        <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "        <td>&quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2&quot;</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>8</td>\n",
+       "        <td>1543541520796</td>\n",
+       "        <td>73</td>\n",
+       "        <td>paid</td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "        <td>1049</td>\n",
+       "        <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "        <td>&quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2&quot;</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>9</td>\n",
+       "        <td>1543541897796</td>\n",
+       "        <td>73</td>\n",
+       "        <td>paid</td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "        <td>1049</td>\n",
+       "        <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "        <td>&quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2&quot;</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>10</td>\n",
+       "        <td>1543541993796</td>\n",
+       "        <td>73</td>\n",
+       "        <td>paid</td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "        <td>1049</td>\n",
+       "        <td>Tampa-St. Petersburg-Clearwater, FL</td>\n",
+       "        <td>&quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2&quot;</td>\n",
+       "    </tr>\n",
+       "</table>"
+      ],
+      "text/plain": [
+       "[(1, 1543537327796, 91, 'free', None, None, 829, 'Dallas-Fort Worth-Arlington, TX', 'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.2; WOW64; Trident/6.0)'),\n",
+       " (2, 1543540121796, 73, 'paid', None, None, 1049, 'Tampa-St. Petersburg-Clearwater, FL', '\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2\"'),\n",
+       " (3, 1543540368796, 73, 'paid', None, None, 1049, 'Tampa-St. Petersburg-Clearwater, FL', '\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2\"'),\n",
+       " (4, 1543540625796, 73, 'paid', None, None, 1049, 'Tampa-St. Petersburg-Clearwater, FL', '\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2\"'),\n",
+       " (5, 1543540856796, 73, 'paid', None, None, 1049, 'Tampa-St. Petersburg-Clearwater, FL', '\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2\"'),\n",
+       " (6, 1543541072796, 73, 'paid', None, None, 1049, 'Tampa-St. Petersburg-Clearwater, FL', '\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2\"'),\n",
+       " (7, 1543541299796, 73, 'paid', None, None, 1049, 'Tampa-St. Petersburg-Clearwater, FL', '\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2\"'),\n",
+       " (8, 1543541520796, 73, 'paid', None, None, 1049, 'Tampa-St. Petersburg-Clearwater, FL', '\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2\"'),\n",
+       " (9, 1543541897796, 73, 'paid', None, None, 1049, 'Tampa-St. Petersburg-Clearwater, FL', '\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2\"'),\n",
+       " (10, 1543541993796, 73, 'paid', None, None, 1049, 'Tampa-St. Petersburg-Clearwater, FL', '\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.78.2 (KHTML, like Gecko) Version/7.0.6 Safari/537.78.2\"')]"
+      ]
+     },
+     "execution_count": 3,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%sql SELECT * FROM songplays LIMIT 10;"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "1 rows affected.\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<table>\n",
+       "    <tr>\n",
+       "        <th>count</th>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>6920</td>\n",
+       "    </tr>\n",
+       "</table>"
+      ],
+      "text/plain": [
+       "[(6920,)]"
+      ]
+     },
+     "execution_count": 4,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%sql SELECT count(*) FROM songplays"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "5 rows affected.\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<table>\n",
+       "    <tr>\n",
+       "        <th>user_id</th>\n",
+       "        <th>first_name</th>\n",
+       "        <th>last_name</th>\n",
+       "        <th>gender</th>\n",
+       "        <th>level</th>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>91</td>\n",
+       "        <td>Jayden</td>\n",
+       "        <td>Bell</td>\n",
+       "        <td>M</td>\n",
+       "        <td>free</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>73</td>\n",
+       "        <td>Jacob</td>\n",
+       "        <td>Klein</td>\n",
+       "        <td>M</td>\n",
+       "        <td>paid</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>86</td>\n",
+       "        <td>Aiden</td>\n",
+       "        <td>Hess</td>\n",
+       "        <td>M</td>\n",
+       "        <td>free</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>24</td>\n",
+       "        <td>Layla</td>\n",
+       "        <td>Griffin</td>\n",
+       "        <td>F</td>\n",
+       "        <td>paid</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>26</td>\n",
+       "        <td>Ryan</td>\n",
+       "        <td>Smith</td>\n",
+       "        <td>M</td>\n",
+       "        <td>free</td>\n",
+       "    </tr>\n",
+       "</table>"
+      ],
+      "text/plain": [
+       "[(91, 'Jayden', 'Bell', 'M', 'free'),\n",
+       " (73, 'Jacob', 'Klein', 'M', 'paid'),\n",
+       " (86, 'Aiden', 'Hess', 'M', 'free'),\n",
+       " (24, 'Layla', 'Griffin', 'F', 'paid'),\n",
+       " (26, 'Ryan', 'Smith', 'M', 'free')]"
+      ]
+     },
+     "execution_count": 5,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%sql SELECT * FROM users LIMIT 5;"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "1 rows affected.\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<table>\n",
+       "    <tr>\n",
+       "        <th>count</th>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>96</td>\n",
+       "    </tr>\n",
+       "</table>"
+      ],
+      "text/plain": [
+       "[(96,)]"
+      ]
+     },
+     "execution_count": 6,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%sql SELECT count(*) FROM users"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "5 rows affected.\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<table>\n",
+       "    <tr>\n",
+       "        <th>song_id</th>\n",
+       "        <th>title</th>\n",
+       "        <th>artist_id</th>\n",
+       "        <th>year</th>\n",
+       "        <th>duration</th>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>SOMZWCG12A8C13C480</td>\n",
+       "        <td>I Didn&#x27;t Mean To</td>\n",
+       "        <td>ARD7TVE1187B99BFB1</td>\n",
+       "        <td>0</td>\n",
+       "        <td>218.93179</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>SOUDSGM12AC9618304</td>\n",
+       "        <td>Insatiable (Instrumental Version)</td>\n",
+       "        <td>ARNTLGG11E2835DDB9</td>\n",
+       "        <td>0</td>\n",
+       "        <td>266.39628</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>SOIAZJW12AB01853F1</td>\n",
+       "        <td>Pink World</td>\n",
+       "        <td>AR8ZCNI1187B9A069B</td>\n",
+       "        <td>1984</td>\n",
+       "        <td>269.81832</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>SOHKNRJ12A6701D1F8</td>\n",
+       "        <td>Drop of Rain</td>\n",
+       "        <td>AR10USD1187B99F3F1</td>\n",
+       "        <td>0</td>\n",
+       "        <td>189.57016</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>SOCIWDW12A8C13D406</td>\n",
+       "        <td>Soul Deep</td>\n",
+       "        <td>ARMJAGH1187FB546F3</td>\n",
+       "        <td>1969</td>\n",
+       "        <td>148.03546</td>\n",
+       "    </tr>\n",
+       "</table>"
+      ],
+      "text/plain": [
+       "[('SOMZWCG12A8C13C480', \"I Didn't Mean To\", 'ARD7TVE1187B99BFB1', 0, Decimal('218.93179')),\n",
+       " ('SOUDSGM12AC9618304', 'Insatiable (Instrumental Version)', 'ARNTLGG11E2835DDB9', 0, Decimal('266.39628')),\n",
+       " ('SOIAZJW12AB01853F1', 'Pink World', 'AR8ZCNI1187B9A069B', 1984, Decimal('269.81832')),\n",
+       " ('SOHKNRJ12A6701D1F8', 'Drop of Rain', 'AR10USD1187B99F3F1', 0, Decimal('189.57016')),\n",
+       " ('SOCIWDW12A8C13D406', 'Soul Deep', 'ARMJAGH1187FB546F3', 1969, Decimal('148.03546'))]"
+      ]
+     },
+     "execution_count": 7,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%sql SELECT * FROM songs LIMIT 5;"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "1 rows affected.\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<table>\n",
+       "    <tr>\n",
+       "        <th>count</th>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>71</td>\n",
+       "    </tr>\n",
+       "</table>"
+      ],
+      "text/plain": [
+       "[(71,)]"
+      ]
+     },
+     "execution_count": 8,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%sql SELECT count(*) FROM songs"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "5 rows affected.\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<table>\n",
+       "    <tr>\n",
+       "        <th>artist_id</th>\n",
+       "        <th>name</th>\n",
+       "        <th>location</th>\n",
+       "        <th>latitude</th>\n",
+       "        <th>longitude</th>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>ARD7TVE1187B99BFB1</td>\n",
+       "        <td>Casual</td>\n",
+       "        <td>California - LA</td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>ARNTLGG11E2835DDB9</td>\n",
+       "        <td>Clp</td>\n",
+       "        <td></td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>AR8ZCNI1187B9A069B</td>\n",
+       "        <td>Planet P Project</td>\n",
+       "        <td></td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>AR10USD1187B99F3F1</td>\n",
+       "        <td>Tweeterfriendly Music</td>\n",
+       "        <td>Burlington, Ontario, Canada</td>\n",
+       "        <td>None</td>\n",
+       "        <td>None</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>ARMJAGH1187FB546F3</td>\n",
+       "        <td>The Box Tops</td>\n",
+       "        <td>Memphis, TN</td>\n",
+       "        <td>35.14968</td>\n",
+       "        <td>-90.04892</td>\n",
+       "    </tr>\n",
+       "</table>"
+      ],
+      "text/plain": [
+       "[('ARD7TVE1187B99BFB1', 'Casual', 'California - LA', None, None),\n",
+       " ('ARNTLGG11E2835DDB9', 'Clp', '', None, None),\n",
+       " ('AR8ZCNI1187B9A069B', 'Planet P Project', '', None, None),\n",
+       " ('AR10USD1187B99F3F1', 'Tweeterfriendly Music', 'Burlington, Ontario, Canada', None, None),\n",
+       " ('ARMJAGH1187FB546F3', 'The Box Tops', 'Memphis, TN', 35.14968, -90.04892)]"
+      ]
+     },
+     "execution_count": 9,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%sql SELECT * FROM artists LIMIT 5;"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "1 rows affected.\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<table>\n",
+       "    <tr>\n",
+       "        <th>count</th>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>69</td>\n",
+       "    </tr>\n",
+       "</table>"
+      ],
+      "text/plain": [
+       "[(69,)]"
+      ]
+     },
+     "execution_count": 10,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%sql SELECT count(*) FROM artists"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "5 rows affected.\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<table>\n",
+       "    <tr>\n",
+       "        <th>start_time</th>\n",
+       "        <th>hour</th>\n",
+       "        <th>day</th>\n",
+       "        <th>week</th>\n",
+       "        <th>month</th>\n",
+       "        <th>year</th>\n",
+       "        <th>weekday</th>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>1543537327796</td>\n",
+       "        <td>0</td>\n",
+       "        <td>30</td>\n",
+       "        <td>48</td>\n",
+       "        <td>11</td>\n",
+       "        <td>2018</td>\n",
+       "        <td>4</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>1543540121796</td>\n",
+       "        <td>1</td>\n",
+       "        <td>30</td>\n",
+       "        <td>48</td>\n",
+       "        <td>11</td>\n",
+       "        <td>2018</td>\n",
+       "        <td>4</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>1543540368796</td>\n",
+       "        <td>1</td>\n",
+       "        <td>30</td>\n",
+       "        <td>48</td>\n",
+       "        <td>11</td>\n",
+       "        <td>2018</td>\n",
+       "        <td>4</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>1543540625796</td>\n",
+       "        <td>1</td>\n",
+       "        <td>30</td>\n",
+       "        <td>48</td>\n",
+       "        <td>11</td>\n",
+       "        <td>2018</td>\n",
+       "        <td>4</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>1543540856796</td>\n",
+       "        <td>1</td>\n",
+       "        <td>30</td>\n",
+       "        <td>48</td>\n",
+       "        <td>11</td>\n",
+       "        <td>2018</td>\n",
+       "        <td>4</td>\n",
+       "    </tr>\n",
+       "</table>"
+      ],
+      "text/plain": [
+       "[(1543537327796, 0, 30, 48, 11, 2018, 4),\n",
+       " (1543540121796, 1, 30, 48, 11, 2018, 4),\n",
+       " (1543540368796, 1, 30, 48, 11, 2018, 4),\n",
+       " (1543540625796, 1, 30, 48, 11, 2018, 4),\n",
+       " (1543540856796, 1, 30, 48, 11, 2018, 4)]"
+      ]
+     },
+     "execution_count": 11,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%sql SELECT * FROM time LIMIT 5;"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "1 rows affected.\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<table>\n",
+       "    <tr>\n",
+       "        <th>count</th>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "        <td>6813</td>\n",
+       "    </tr>\n",
+       "</table>"
+      ],
+      "text/plain": [
+       "[(6813,)]"
+      ]
+     },
+     "execution_count": 12,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%sql SELECT count(*) FROM time"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "## REMEMBER: Restart this notebook to close connection to `sparkifydb`\n",
+    "Each time you run the cells above, remember to restart this notebook to close the connection to your database. Otherwise, you won't be able to run your code in `create_tables.py`, `etl.py`, or `etl.ipynb` files since you can't make multiple connections to the same database (in this case, sparkifydb)."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "# Sanity Tests \n",
+    "\n",
+    "Execute the cells below once you are ready to submit the project. Some basic sanity testing will be performed to esnure that your work does NOT contain any commonly found issues. \n",
+    "\n",
+    "Run each cell and if a cell produces an warning message is orange, you should make appropriate changes to your code before submitting. If all test in a cell pass,no warnings will be printed. \n",
+    "\n",
+    "The test cases assume that you are using certain column names in your tables. If you get a `IndexError: single positional indexer is out-of-bounds` you may need to change the column names being used by the test cases. Instructions for doing this appear right boefore cell that may require these changes.\n",
+    "\n",
+    "The tests below are only meant to help you make your work foolproof. The submission will still be graded by a human grader against the project rubric.\n",
+    "\n",
+    "---"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "## Grab Table Names for Testing"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "import sql_queries as sqlq"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "5 rows affected.\n",
+      "Returning data to local variable _tablenames\n"
+     ]
+    }
+   ],
+   "source": [
+    "%%sql _tablenames <<\n",
+    "SELECT tablename\n",
+    "FROM pg_catalog.pg_tables\n",
+    "WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema' AND tableowner = 'student';"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "tablenames = _tablenames.DataFrame()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "user_table = [name for name in list(tablenames.tablename) if name in sqlq.user_table_create][0]\n",
+    "song_table = [name for name in list(tablenames.tablename) if name in sqlq.song_table_create][0]\n",
+    "artists_table = [name for name in list(tablenames.tablename) if name in sqlq.artist_table_create][0]\n",
+    "songplay_table = [name for name in list(tablenames.tablename) if name in sqlq.songplay_table_create][0]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "## Run Primary Key Tests"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "1 rows affected.\n",
+      "Returning data to local variable _output\n"
+     ]
+    }
+   ],
+   "source": [
+    "%sql _output << SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS data_type, a.attnotnull, i.indisprimary \\\n",
+    "FROM   pg_index i \\\n",
+    "JOIN   pg_attribute a ON a.attrelid = i.indrelid \\\n",
+    "                     AND a.attnum = ANY(i.indkey) \\\n",
+    "WHERE  i.indrelid = '{user_table}'::regclass"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "if not _output:\n",
+    "    print('\\033[93m'+'[WARNING] '+ f\"The {user_table} table does not have a primary key!\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "1 rows affected.\n",
+      "Returning data to local variable _output\n"
+     ]
+    }
+   ],
+   "source": [
+    "%sql _output << SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS data_type, a.attnotnull, i.indisprimary \\\n",
+    "FROM   pg_index i \\\n",
+    "JOIN   pg_attribute a ON a.attrelid = i.indrelid \\\n",
+    "                     AND a.attnum = ANY(i.indkey) \\\n",
+    "WHERE  i.indrelid = '{artists_table}'::regclass"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "if not _output: \n",
+    "    print('\\033[93m'+'[WARNING] '+ f\"The {artists_table} table does not have a primary key!\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "1 rows affected.\n",
+      "Returning data to local variable _output\n"
+     ]
+    }
+   ],
+   "source": [
+    "%sql _output << SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS data_type, a.attnotnull, i.indisprimary \\\n",
+    "FROM   pg_index i \\\n",
+    "JOIN   pg_attribute a ON a.attrelid = i.indrelid \\\n",
+    "                     AND a.attnum = ANY(i.indkey) \\\n",
+    "WHERE  i.indrelid = '{songplay_table}'::regclass"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "if not _output:\n",
+    "    print('\\033[93m'+'[WARNING] '+ f\"The {songplay_table} table does not have a primary key!\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "1 rows affected.\n",
+      "Returning data to local variable _output\n"
+     ]
+    }
+   ],
+   "source": [
+    "%sql _output << SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS data_type, a.attnotnull, i.indisprimary \\\n",
+    "FROM   pg_index i \\\n",
+    "JOIN   pg_attribute a ON a.attrelid = i.indrelid \\\n",
+    "                     AND a.attnum = ANY(i.indkey) \\\n",
+    "WHERE  i.indrelid = '{song_table}'::regclass"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "if not _output:\n",
+    "    print('\\033[93m'+'[WARNING] '+ f\"The {song_table} table does not have a primary key!\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "## Run Data Type and Constraints Check"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "5 rows affected.\n",
+      "Returning data to local variable _output\n"
+     ]
+    }
+   ],
+   "source": [
+    "%sql _output << SELECT * FROM information_schema.columns where table_name='{user_table}'"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "**Check the column `user_id` for correct data type.**\n",
+    "If you get a `IndexError: single positional indexer is out-of-bounds` error, you may be using a different column name. Change the column name below and run the cell again. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "output = _output.DataFrame()\n",
+    "_dtype = output[output.column_name == 'user_id'].data_type.iloc[0]\n",
+    "if _dtype not in ['integer', 'bigint']:\n",
+    "    print('\\033[93m'+'[WARNING] '+ f\"Type {_dtype} may not be an appropriate data type for column 'user_id' in the '{user_table}' table.\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "5 rows affected.\n",
+      "Returning data to local variable _output\n"
+     ]
+    }
+   ],
+   "source": [
+    "%sql _output << SELECT * FROM information_schema.columns where table_name='{song_table}'"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "**Check the column `year` for correct data type.\n",
+    "Check columns `title` and `duration` for not-NULL constraints.**\n",
+    "\n",
+    "If you get a `IndexError: single positional indexer is out-of-bounds` error, you may be using different column names. Change the column name(s) below and run the cell again. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "output = _output.DataFrame()\n",
+    "\n",
+    "_dtype = output[output.column_name == 'year'].data_type.iloc[0]\n",
+    "if _dtype not in ['integer']:\n",
+    "    print('\\033[93m'+'[WARNING] '+ f\"Type '{_dtype}' may not be an appropriate data type for column 'year' in the '{song_table}' table.\")\n",
+    "\n",
+    "_nullable_title = output[output.column_name == 'title'].is_nullable.iloc[0]\n",
+    "_nullable_duration = output[output.column_name == 'duration'].is_nullable.iloc[0]\n",
+    "if (_nullable_duration != 'NO') or (_nullable_title != 'NO'): \n",
+    "    print('\\033[93m'+'[WARNING] '+ f\"You may want to add appropriate NOT NULL constraints to the '{song_table}' table.\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "5 rows affected.\n",
+      "Returning data to local variable _output\n"
+     ]
+    }
+   ],
+   "source": [
+    "%sql _output << SELECT * FROM information_schema.columns where table_name='{artists_table}'"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "**Check the columns `latitude` and `longitude` for correct data type.\n",
+    "Check column `name` for not-NULL constraint.**\n",
+    "\n",
+    "If you get a `IndexError: single positional indexer is out-of-bounds` error, you may be using different column names. Change the column name(s) below and run the cell again. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "output = _output.DataFrame()\n",
+    "\n",
+    "_dtype_latitude = output[output.column_name == 'latitude'].data_type.iloc[0]\n",
+    "if _dtype_latitude not in ['double precision']:\n",
+    "    print('\\033[93m'+'[WARNING] '+ f\"Type '{_dtype_latitude}' may not be an appropriate data type for column 'latitude' in the '{artists_table}' table\")\n",
+    "\n",
+    "_dtype_longitude = output[output.column_name == 'longitude'].data_type.iloc[0]\n",
+    "if _dtype_longitude not in ['double precision']:\n",
+    "    print('\\033[93m'+'[WARNING] '+ f\"Type '{_dtype_longitude}' may not be an appropriate data type for column 'longitude' in the '{artists_table}' table\")\n",
+    "\n",
+    "\n",
+    "_nullable_name = output[output.column_name == 'name'].is_nullable.iloc[0]\n",
+    "if _nullable_name != 'NO':\n",
+    "    print('\\033[93m'+'[WARNING] '+ f\"You may want to add appropriate NOT NULL constraints to the '{artists_table}' table.\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://student:***@127.0.0.1/sparkifydb\n",
+      "9 rows affected.\n",
+      "Returning data to local variable _output\n"
+     ]
+    }
+   ],
+   "source": [
+    "%sql _output << SELECT * FROM information_schema.columns where table_name='{songplay_table}'"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "**Check the columns `start_time` and `user_id` for correct data type.\n",
+    "Check columns `start_time` and `user_id` for not-NULL constraint.**\n",
+    "\n",
+    "If you get a `IndexError: single positional indexer is out-of-bounds` error, you may be using different column names. Change the column name(s) below and run the cell again. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 32,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "\u001b[93m[WARNING] Type 'bigint' may not be an appropriate data type for column 'start_time' in the 'songplays' table.\n"
+     ]
+    }
+   ],
+   "source": [
+    "output = _output.DataFrame()\n",
+    "\n",
+    "_dtype_start_time = output[output.column_name == 'start_time'].data_type.iloc[0]\n",
+    "if 'timestamp' not in _dtype_start_time: \n",
+    "    print('\\033[93m'+'[WARNING] '+ f\"Type '{_dtype_start_time}' may not be an appropriate data type for column 'start_time' in the '{songplay_table}' table.\")\n",
+    "\n",
+    "_dtype_user_id = output[output.column_name == 'user_id'].data_type.iloc[0]\n",
+    "if _dtype_user_id not in ['integer', 'bigint']:\n",
+    "    print('\\033[93m'+'[WARNING] '+ f\"Type '{_dtype_user_id}' may not be an appropriate data type for column 'user_id' in the '{songplay_table}' table.\")\n",
+    "\n",
+    "\n",
+    "_nullable_time = output[output.column_name == 'start_time'].is_nullable.iloc[0]\n",
+    "_nullable_uid = output[output.column_name == 'user_id'].is_nullable.iloc[0]\n",
+    "\n",
+    "if (_nullable_time != 'NO') or (_nullable_uid != 'NO'):\n",
+    "    print('\\033[93m'+'[WARNING] '+ f\"You may want to add appropriate NOT NULL constraints to the '{songplay_table}' table.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "editable": true
+   },
+   "source": [
+    "## Run Tests for Upsertion Check"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "import re"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 34,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": [
+    "if not re.search('ON\\s+CONFLICT',sqlq.songplay_table_insert,re.IGNORECASE) or \\\n",
+    "   not re.search('ON\\s+CONFLICT',sqlq.user_table_insert,re.IGNORECASE) or \\\n",
+    "   not re.search('ON\\s+CONFLICT',sqlq.song_table_insert,re.IGNORECASE) or \\\n",
+    "   not re.search('ON\\s+CONFLICT',sqlq.artist_table_insert,re.IGNORECASE):\n",
+    "    print('\\033[93m'+'[WARNING]Some of your insert queries may need an \"ON CONFLICT\" clause.')\n",
+    "    print('\\033[93m'+'         You can either skip conflicting insertions with with \"ON CONFLICT DO NOTHING\"')\n",
+    "    print('\\033[93m'+'         OR use \"ON CONFLICT DO UPDATE SET\"')\n",
+    "    print('\\033[93m'+'         Check this link for more details: https://www.postgresqltutorial.com/postgresql-upsert/')\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "editable": true
+   },
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.6.3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
+
+import psycopg2
+from sql_queries import create_table_queries, drop_table_queries
+
+
+def create_database():
+    """
+    - Creates and connects to the sparkifydb
+    - Returns the connection and cursor to sparkifydb
+    """
+    
+    # connect to default database
+    conn = psycopg2.connect("host=127.0.0.1 dbname=studentdb user=student password=student")
+    conn.set_session(autocommit=True)
+    cur = conn.cursor()
+    
+    # create sparkify database with UTF8 encoding
+    cur.execute("DROP DATABASE IF EXISTS sparkifydb")
+    cur.execute("CREATE DATABASE sparkifydb WITH ENCODING 'utf8' TEMPLATE template0")
+
+    # close connection to default database
+    conn.close()    
+    
+    # connect to sparkify database
+    conn = psycopg2.connect("host=127.0.0.1 dbname=sparkifydb user=student password=student")
+    cur = conn.cursor()
+    
+    return cur, conn
+
+
+def drop_tables(cur, conn):
+    """
+    Drops each table using the queries in `drop_table_queries` list.
+    """
+    for query in drop_table_queries:
+        cur.execute(query)
+        conn.commit()
+
+
+def create_tables(cur, conn):
+    """
+    Creates each table using the queries in `create_table_queries` list. 
+    """
+    for query in create_table_queries:
+        cur.execute(query)
+        conn.commit()
+
+
+def main():
+    """
+    - Drops (if exists) and Creates the sparkify database. 
+    
+    - Establishes connection with the sparkify database and gets
+    cursor to it.  
+    
+    - Drops all the tables.  
+    
+    - Creates all tables needed. 
+    
+    - Finally, closes the connection. 
+    """
+    cur, conn = create_database()
+    
+    drop_tables(cur, conn)
+    create_tables(cur, conn)
+
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()
